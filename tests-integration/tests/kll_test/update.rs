@@ -188,3 +188,38 @@ fn large_weighted_values_preserve_exact_mass_without_compaction() {
         Some(20)
     );
 }
+
+#[test]
+fn weighted_updates_preserve_sorted_levels_across_merge_and_roundtrip() {
+    for k in [8, 64, 200] {
+        let mut sketch = KllSketch::<i64>::new(k).unwrap();
+        let mut expected_n = 0;
+        for round in 0..8 {
+            for index in 0..257 {
+                let value = (index * 131 % 257) as i64 - 128;
+                let weight = (1u64 << (index % 12)) + (index % 3) as u64;
+                sketch.update_with_weight(value, weight);
+                expected_n += weight;
+            }
+            let mut ordinary = KllSketch::<i64>::new(k).unwrap();
+            for value in -100..100 {
+                ordinary.update(value);
+            }
+            sketch.merge(&ordinary).unwrap();
+            expected_n += 200;
+            let decoded = KllSketch::<i64>::deserialize(&sketch.serialize()).unwrap();
+            assert_eq!(decoded, sketch, "round {round}, k {k}");
+            assert_eq!(decoded.n(), expected_n);
+            assert_eq!(decoded.min_item(), Some(&-128));
+            assert_eq!(decoded.max_item(), Some(&128));
+            let mut previous = 0.0;
+            for value in -128..=128 {
+                let rank = decoded.rank(&value, SearchCriteria::Inclusive).unwrap();
+                assert!(rank >= previous);
+                previous = rank;
+            }
+            assert_eq!(previous, 1.0);
+            sketch = decoded;
+        }
+    }
+}

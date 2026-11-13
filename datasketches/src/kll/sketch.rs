@@ -151,7 +151,7 @@ impl<T: Clone + Ord> KllSketch<T> {
     /// Updates the sketch with an item repeated `weight` times.
     ///
     /// Represents the same weighted stream as calling [`update`](Self::update) `weight` times.
-    /// Compaction choices and retained samples may differ. Large weights are merged using
+    /// Compaction choices and retained samples may differ. Large weights use
     /// a logarithmic number of retained copies instead of one update per copy. A weight of
     /// zero is a no-op.
     ///
@@ -185,7 +185,7 @@ impl<T: Clone + Ord> KllSketch<T> {
             .n
             .checked_add(weight)
             .expect("total stream weight overflow");
-        // Tiny runs avoid the temporary levels and merge buffers even at capacity.
+        // Tiny runs keep the ordinary update path, including its exact-mode behavior.
         if weight <= u64::from(self.m) || weight < (self.capacity - self.num_retained) as u64 {
             self.update_min_max(&item);
             for _ in 1..weight {
@@ -197,26 +197,38 @@ impl<T: Clone + Ord> KllSketch<T> {
             // set in `weight` is an exact sketch of `weight` copies. Bits above the top level
             // fold into `weight >> top` copies at the top level.
             let num_levels = ((u64::BITS - weight.leading_zeros()) as usize).min(MAX_NUM_LEVELS);
-            let levels = (0..num_levels)
-                .map(|level| {
-                    let count = if level + 1 < num_levels {
-                        (weight >> level) & 1
-                    } else {
-                        weight >> level
-                    };
-                    vec![item.clone(); count as usize]
-                })
-                .collect();
-            let weighted = Self::make(
-                self.k,
-                self.k,
-                weight,
-                levels,
-                Some(item.clone()),
-                Some(item),
-                true,
-            );
-            self.merge_unchecked(&weighted, final_n);
+            self.update_min_max(&item);
+            if weight & 1 != 0 {
+                self.internal_update(item.clone());
+            }
+            self.levels
+                .resize_with(self.levels.len().max(num_levels), Vec::new);
+            for level in 1..num_levels {
+                let count = if level + 1 < num_levels {
+                    (weight >> level) & 1
+                } else {
+                    weight >> level
+                } as usize;
+                if count == 0 {
+                    continue;
+                }
+                // Upper levels remain sorted so queries and ordinary merges can reuse them.
+                let items = &mut self.levels[level];
+                let position = items.partition_point(|retained| retained < &item);
+                items.splice(position..position, std::iter::repeat_n(item.clone(), count));
+            }
+            self.refresh_capacity_state();
+            if self.num_retained >= self.capacity {
+                self.levels = general_compress(
+                    std::mem::take(&mut self.levels),
+                    self.k,
+                    self.m,
+                    self.is_level_zero_sorted,
+                );
+                self.refresh_capacity_state();
+            }
+            self.n = final_n;
+            debug_assert_eq!(self.total_weight(), self.n, "total weight does not match n");
         }
     }
 

@@ -8,6 +8,10 @@ All significant changes to this project will be documented in this file.
 
 * Add `KllSketch::update_with_weight` to ingest repeated values without one update per copy for large weights.
 
+### Improvements
+
+* Reduce allocations during KLL updates with large repeated weights.
+
 ## v0.6.0
 
 ### Breaking changes
