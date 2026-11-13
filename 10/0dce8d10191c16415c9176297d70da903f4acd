@@ -1,0 +1,27 @@
+CHANGELOG.md
+  s_17057bba187655::t_27bc178b0b5f95 7-10
+benchmarks/kll/update.rs
+  s_17057bba187655::t_b315398891fa18 32-65
+datasketches/src/kll/sketch.rs
+  s_17057bba187655::t_9b8f104ec7f4db 151-222,260-262,264
+tests-integration/tests/kll_test/main.rs
+  s_17057bba187655::t_8f40c4652dbff5 22
+tests-integration/tests/kll_test/update.rs
+  s_17057bba187655::t_f6c03128a59b19 1-190
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "100dce8d10191c16415c9176297d70da903f4acd",
+  "prompts": {},
+  "sessions": {
+    "s_17057bba187655": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c56d-fbcd-75c2-86d2-c4b3f17c03dc",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "WenyXu <wenymedia@gmail.com>"
+    }
+  }
+}
