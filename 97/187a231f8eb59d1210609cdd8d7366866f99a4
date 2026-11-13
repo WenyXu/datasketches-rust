@@ -1,0 +1,21 @@
+datasketches/src/kll/sketch.rs
+  s_17057bba187655::t_d6bb859974113b 154,188,200-231
+tests-integration/tests/kll_test/update.rs
+  s_17057bba187655::t_e2288d11002ee3 191-225
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "97187a231f8eb59d1210609cdd8d7366866f99a4",
+  "prompts": {},
+  "sessions": {
+    "s_17057bba187655": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c56d-fbcd-75c2-86d2-c4b3f17c03dc",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "WenyXu <wenymedia@gmail.com>"
+    }
+  }
+}
