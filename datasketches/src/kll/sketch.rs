@@ -148,6 +148,78 @@ impl<T: Clone + Ord> KllSketch<T> {
         self.internal_update(item);
     }
 
+    /// Updates the sketch with an item repeated `weight` times.
+    ///
+    /// Represents the same weighted stream as calling [`update`](Self::update) `weight` times.
+    /// Compaction choices and retained samples may differ. Large weights are merged using
+    /// a logarithmic number of retained copies instead of one update per copy. A weight of
+    /// zero is a no-op.
+    ///
+    /// # Panics
+    ///
+    /// Panics without modifying the sketch if the stream weight would exceed [`u64::MAX`].
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use datasketches::common::SearchCriteria;
+    /// use datasketches::kll::KllSketch;
+    /// let mut sketch = KllSketch::<i64>::new(200).unwrap();
+    /// sketch.update_with_weight(1, 3);
+    /// sketch.update_with_weight(2, 1_000_000);
+    /// assert_eq!(sketch.n(), 1_000_003);
+    /// assert_eq!(
+    ///     sketch.rank(&1, SearchCriteria::Inclusive).unwrap(),
+    ///     3.0 / 1_000_003.0
+    /// );
+    /// ```
+    pub fn update_with_weight(&mut self, item: T, weight: u64) {
+        if weight == 0 {
+            return;
+        }
+        if weight == 1 {
+            self.update(item);
+            return;
+        }
+        let final_n = self
+            .n
+            .checked_add(weight)
+            .expect("total stream weight overflow");
+        // Tiny runs avoid the temporary levels and merge buffers even at capacity.
+        if weight <= u64::from(self.m) || weight < (self.capacity - self.num_retained) as u64 {
+            self.update_min_max(&item);
+            for _ in 1..weight {
+                self.internal_update(item.clone());
+            }
+            self.internal_update(item);
+        } else {
+            // An item at level `h` carries weight `2^h`, so one copy at each level whose bit is
+            // set in `weight` is an exact sketch of `weight` copies. Bits above the top level
+            // fold into `weight >> top` copies at the top level.
+            let num_levels = ((u64::BITS - weight.leading_zeros()) as usize).min(MAX_NUM_LEVELS);
+            let levels = (0..num_levels)
+                .map(|level| {
+                    let count = if level + 1 < num_levels {
+                        (weight >> level) & 1
+                    } else {
+                        weight >> level
+                    };
+                    vec![item.clone(); count as usize]
+                })
+                .collect();
+            let weighted = Self::make(
+                self.k,
+                self.k,
+                weight,
+                levels,
+                Some(item.clone()),
+                Some(item),
+                true,
+            );
+            self.merge_unchecked(&weighted, final_n);
+        }
+    }
+
     /// Resets this sketch to its empty state while retaining its configuration.
     pub fn reset(&mut self) {
         self.min_k = self.k;
@@ -185,7 +257,11 @@ impl<T: Clone + Ord> KllSketch<T> {
                 other.n
             ))
         })?;
+        self.merge_unchecked(other, final_n);
+        Ok(())
+    }
 
+    fn merge_unchecked(&mut self, other: &KllSketch<T>, final_n: u64) {
         self.update_min_max_from_other(other);
 
         for item in &other.levels[0] {
@@ -202,7 +278,6 @@ impl<T: Clone + Ord> KllSketch<T> {
         }
 
         debug_assert_eq!(self.total_weight(), self.n, "total weight does not match n");
-        Ok(())
     }
 
     /// Returns the normalized rank of the given item.

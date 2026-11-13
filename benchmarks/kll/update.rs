@@ -29,3 +29,37 @@ fn update(bencher: Bencher, len: usize) {
         .counter(ItemsCount::new(len))
         .bench_local(|| build_sketch(black_box(&values)));
 }
+
+#[divan::bench(args = [1, 5, 8, 16, 32, 128, 1024])]
+fn repeated_value(bencher: Bencher, weight: u64) {
+    let values: Vec<_> = (0_u64..1024)
+        .map(|value| value.to_be_bytes().to_vec())
+        .collect();
+    bencher
+        .counter(ItemsCount::new(values.len() as u64 * weight))
+        .bench_local(|| {
+            let mut sketch = datasketches::kll::KllSketch::new(64).unwrap();
+            for value in black_box(&values) {
+                for _ in 0..weight {
+                    sketch.update(value.clone());
+                }
+            }
+            black_box(sketch)
+        });
+}
+
+#[divan::bench(args = [1, 5, 8, 16, 32, 128, 1024])]
+fn weighted_value(bencher: Bencher, weight: u64) {
+    let values: Vec<_> = (0_u64..1024)
+        .map(|value| value.to_be_bytes().to_vec())
+        .collect();
+    bencher
+        .counter(ItemsCount::new(values.len() as u64 * weight))
+        .bench_local(|| {
+            let mut sketch = datasketches::kll::KllSketch::new(64).unwrap();
+            for value in black_box(&values) {
+                sketch.update_with_weight(value.clone(), weight);
+            }
+            black_box(sketch)
+        });
+}

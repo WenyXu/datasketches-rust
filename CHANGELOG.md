@@ -4,6 +4,10 @@ All significant changes to this project will be documented in this file.
 
 ## Unreleased
 
+### New features
+
+* Add `KllSketch::update_with_weight` to ingest repeated values without one update per copy for large weights.
+
 ## v0.6.0
 
 ### Breaking changes
